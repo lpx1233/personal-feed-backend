@@ -1,6 +1,4 @@
 # Simple Build Tool
-# http://www.scala-sbt.org/release/docs/Getting-Started/Directories.html#configuring-version-control
-
 dist/*
 target/
 lib_managed/
@@ -10,3 +8,9 @@ project/plugins/project/
 .history
 .cache
 .lib/
+
+# ensime related
+.ensime
+ensime-langserver.log
+pc.stdout.log
+.ensime_cache
