@@ -11,3 +11,8 @@ libraryDependencies += "com.typesafe.akka" %% "akka-stream" % "latest.release"
 libraryDependencies += "com.typesafe.akka" %% "akka-http-spray-json" % "latest.release"
 libraryDependencies += "io.spray" %% "spray-json" % "latest.release"
 libraryDependencies += "org.reactivemongo" %% "reactivemongo" % "latest.release"
+
+// test dependencies
+libraryDependencies += "com.typesafe.akka" %% "akka-testkit" % "latest.release" % Test
+libraryDependencies += "com.typesafe.akka" %% "akka-http-testkit" % "latest.release" % Test
+libraryDependencies += "com.typesafe.akka" %% "akka-stream-testkit" % "latest.release" % Test

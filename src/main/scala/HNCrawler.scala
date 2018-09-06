@@ -16,7 +16,7 @@ import reactivemongo.bson.{
 }
 
 import scala.concurrent.Future
-import scala.util.{ Failure, Success }
+import scala.util.{ Failure, Success, Try }
 
 object HNCrawler {
   // internal data structure
@@ -61,15 +61,19 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
   var itemsStored: Int = 0
   // define core functionality
   def receive = {
+    // TODO: implement retry method
     case Start =>
         // start crawl hacker news
         log.info("HNCrawler get Start")
-        inProgress = true
-        isTopStoriesStored = false
-        itemsStored = 0
-        http.singleRequest(HttpRequest(uri =
-            "https://hacker-news.firebaseio.com/v0/topstories.json"))
-          .flatMap {
+        Future.fromTry(Try(
+            if(!inProgress) true else throw new Exception("HNCrawler in progress")))
+          .flatMap { (_) =>
+            inProgress = true
+            isTopStoriesStored = false
+            itemsStored = 0
+            http.singleRequest(HttpRequest(uri =
+                "https://hacker-news.firebaseio.com/v0/topstories.json"))
+          }.flatMap {
             case HttpResponse(StatusCodes.OK, _, e, _) => Unmarshal(e).to[List[Int]]
             case HttpResponse(status, _, e, _) =>
               e.discardBytes()
