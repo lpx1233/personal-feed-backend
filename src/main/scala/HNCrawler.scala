@@ -23,21 +23,21 @@ object HNCrawler {
   def props: Props = Props[HNCrawler]
   // internal data structure
   case class HNItem(
-    id: Int,
-    deleted: Boolean,
-    itemType: String,
-    by: String,
-    time: Long,
-    test: String,
-    dead: Boolean,
-    parent: Int,
-    poll: Int,
-    kids: List[Int],
-    url: String,
-    score: Int,
-    title: String,
-    parts: List[Int],
-    descendants: Int)
+    id: Int = 0,
+    deleted: Boolean = false,
+    itemType: String = "",
+    by: String = "",
+    time: Long = 0,
+    test: String = "",
+    dead: Boolean = false,
+    parent: Int = 0,
+    poll: Int = 0,
+    kids: List[Int] = List(),
+    url: String = "",
+    score: Int = 0,
+    title: String = "",
+    parts: List[Int] = List(),
+    descendants: Int = 0)
   implicit object HNItemWriter extends BSONDocumentWriter[HNItem] {
     def write(item: HNItem): BSONDocument =
       BSONDocument(
@@ -111,7 +111,7 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
             isTopStoriesStored = false
             itemsStored = 0
             http.singleRequest(HttpRequest(uri =
-                "http://hacker-news.firebaseio.com/v0/topstories.json"))
+              "https://hacker-news.firebaseio.com/v0/topstories.json"))
           }.flatMap {
             case HttpResponse(StatusCodes.OK, _, e, _) => Unmarshal(e).to[List[Int]]
             case HttpResponse(status, _, e, _) =>
@@ -127,22 +127,25 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
           }
     case GetItemsByTopStoriesIds(items: List[Int]) =>
       log.info("HNCrawler get GetItemsByTopStoriesIds")
-      items.map((item: Int) =>
-          (item, s"http://hacker-news.firebaseio.com/v0/item/$item.json"))
-        .map { case (id: Int, uri: String) =>
-            (id, http.singleRequest(HttpRequest(uri=uri)))}
-        .foreach{ case (id: Int, responseFuture: Future[HttpResponse]) => {
-          responseFuture.flatMap {
-            case HttpResponse(StatusCodes.OK, _, e, _) => Unmarshal(e).to[HNItem]
-            case HttpResponse(status, _, e, _) =>
-              e.discardBytes()
-              Future.failed(new Exception(s"service returned ${status.intValue()}"))
-          }.onComplete {
-            case Success(item: HNItem) => self ! StoreItem(item)
-            case Failure(e) => log.error(
-                s"Hacker News Crawler: Get item[$id] error, ${e.getMessage()}")
-          }
-        }}
+      items match {
+        case item :: rest =>
+          http.singleRequest(HttpRequest(uri =
+              s"https://hacker-news.firebaseio.com/v0/item/$item.json"))
+            .flatMap {
+              case HttpResponse(StatusCodes.OK, _, e, _) => Unmarshal(e).to[HNItem]
+              case HttpResponse(status, _, e, _) =>
+                e.discardBytes()
+                Future.failed(new Exception(s"service returned ${status.intValue()}"))
+            }.onComplete((res) => {
+              self ! GetItemsByTopStoriesIds(rest)
+              res match {
+                case Success(item: HNItem) => self ! StoreItem(item)
+                case Failure(e) => log.error(
+                    s"Hacker News Crawler: Get item[$item] error, ${e.getMessage()}")
+              }
+            })
+        case Nil =>
+      }
     case StoreTopStoriesIds(items: List[Int]) =>
       // store the top stories ids in mongodb
       log.info("HNCrawler get StoreTopStoriesIds")
