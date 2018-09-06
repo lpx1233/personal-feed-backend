@@ -1,5 +1,15 @@
 package cn.lpx1233.personal_feed_backend
 
+import akka.actor.ActorSystem
+
 object Main extends App {
-  println("Hello, World!")
+  println("Personal Feed Backend Start!")
+
+  // start crawler actors
+  val crawlerActorSystem = ActorSystem("crawler")
+  val crawlerScheduler = crawlerActorSystem.actorOf(CrawlScheduler.props)
+  crawlerScheduler ! CrawlScheduler.Start
+
+  // TODO: start web server
+
 }

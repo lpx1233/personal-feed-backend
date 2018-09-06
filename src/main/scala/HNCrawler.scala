@@ -12,13 +12,15 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
 import reactivemongo.api.{ Cursor, DefaultDB }
 import reactivemongo.bson.{
-  BSONDocumentWriter, BSONDocumentReader, Macros, document
+  BSONDocumentWriter, BSONDocumentReader, Macros, BSONDocument
 }
 
 import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 
 object HNCrawler {
+  // props
+  def props: Props = Props[HNCrawler]
   // internal data structure
   case class HNItem(
     id: Int,
@@ -36,6 +38,43 @@ object HNCrawler {
     title: String,
     parts: List[Int],
     descendants: Int)
+  implicit object HNItemWriter extends BSONDocumentWriter[HNItem] {
+    def write(item: HNItem): BSONDocument =
+      BSONDocument(
+        "id" -> item.id,
+        "deleted" -> item.deleted,
+        "itemType" -> item.itemType,
+        "by" -> item.by,
+        "time" -> item.time,
+        "test" -> item.test,
+        "dead" -> item.dead,
+        "parent" -> item.parent,
+        "poll" -> item.poll,
+        "kids" -> item.kids,
+        "url" -> item.url,
+        "score" -> item.score,
+        "title" -> item.title,
+        "parts" -> item.parts,
+        "descendants" -> item.descendants)
+  }
+  implicit object HNItemReader extends BSONDocumentReader[HNItem] {
+    def read(bson: BSONDocument): HNItem = new HNItem(
+      bson.getAs[Int]("id").get,
+      bson.getAs[Boolean]("deleted").get,
+      bson.getAs[String]("itemType").get,
+      bson.getAs[String]("by").get,
+      bson.getAs[Long]("time").get,
+      bson.getAs[String]("test").get,
+      bson.getAs[Boolean]("dead").get,
+      bson.getAs[Int]("parent").get,
+      bson.getAs[Int]("poll").get,
+      bson.getAs[List[Int]]("kids").get,
+      bson.getAs[String]("url").get,
+      bson.getAs[Int]("score").get,
+      bson.getAs[String]("title").get,
+      bson.getAs[List[Int]]("parts").get,
+      bson.getAs[Int]("descendants").get)
+  }
   // messages
   case object Start
   private case class GetItemsByTopStoriesIds(items: List[Int])
@@ -72,7 +111,7 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
             isTopStoriesStored = false
             itemsStored = 0
             http.singleRequest(HttpRequest(uri =
-                "https://hacker-news.firebaseio.com/v0/topstories.json"))
+                "http://hacker-news.firebaseio.com/v0/topstories.json"))
           }.flatMap {
             case HttpResponse(StatusCodes.OK, _, e, _) => Unmarshal(e).to[List[Int]]
             case HttpResponse(status, _, e, _) =>
@@ -89,7 +128,7 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
     case GetItemsByTopStoriesIds(items: List[Int]) =>
       log.info("HNCrawler get GetItemsByTopStoriesIds")
       items.map((item: Int) =>
-          (item, s"https://hacker-news.firebaseio.com/v0/item/$item.json"))
+          (item, s"http://hacker-news.firebaseio.com/v0/item/$item.json"))
         .map { case (id: Int, uri: String) =>
             (id, http.singleRequest(HttpRequest(uri=uri)))}
         .foreach{ case (id: Int, responseFuture: Future[HttpResponse]) => {
@@ -107,8 +146,8 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
     case StoreTopStoriesIds(items: List[Int]) =>
       // store the top stories ids in mongodb
       log.info("HNCrawler get StoreTopStoriesIds")
-      val selector = document("_id" -> 0)
-      val updater = document("top_stories" -> items)
+      val selector = BSONDocument("_id" -> 0)
+      val updater = BSONDocument("top_stories" -> items)
       MongoConn.connection.database("hacker_news")
         .map(_.collection("top_stories"))
         .flatMap(_.update(selector, updater, upsert=true))
@@ -123,8 +162,7 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
     case StoreItem(item: HNItem) =>
       // store a item using mongodb
       log.info("HNCrawler get StoreItem")
-      val selector = document("id" -> item.id)
-      implicit def itemsWriter: BSONDocumentWriter[HNItem] = Macros.writer[HNItem]
+      val selector = BSONDocument("id" -> item.id)
       MongoConn.connection.database("hacker_news")
         .map(_.collection("items"))
         .flatMap(_.update(selector, item, upsert=true))

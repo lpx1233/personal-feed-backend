@@ -10,7 +10,7 @@ import scala.concurrent.duration._
 
 object CrawlScheduler {
   // props
-  def props(hnCrawler: ActorRef): Props = Props(new CrawlScheduler(hnCrawler))
+  def props: Props = Props[CrawlScheduler]
   // messages
   case object Start
   case object Stop
@@ -19,14 +19,18 @@ object CrawlScheduler {
   private case object HNKey
 }
 
-class CrawlScheduler(hnCrawler: ActorRef)
-    extends Actor with ActorLogging with Timers {
+class CrawlScheduler extends Actor with ActorLogging with Timers {
   // Setup env
   import CrawlScheduler._
+  val hnCrawler = context.actorOf(HNCrawler.props)
   // define core functionality
   def receive = {
-    case Start => timers.startPeriodicTimer(HNKey, CrawlHN, 1 day)
+    case Start =>
+      self ! CrawlHN
+      timers.startPeriodicTimer(HNKey, CrawlHN, 1.day)
     case Stop => timers.cancel(HNKey)
-    case CrawlHN => hnCrawler ! HNCrawler.Start
+    case CrawlHN =>
+      log.info("start hn crawler")
+      hnCrawler ! HNCrawler.Start
   }
 }
