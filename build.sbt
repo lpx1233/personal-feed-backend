@@ -11,6 +11,7 @@ libraryDependencies += "com.typesafe.akka" %% "akka-stream" % "latest.release"
 libraryDependencies += "com.typesafe.akka" %% "akka-http-spray-json" % "latest.release"
 libraryDependencies += "io.spray" %% "spray-json" % "latest.release"
 libraryDependencies += "org.reactivemongo" %% "reactivemongo" % "latest.release"
+libraryDependencies += "com.typesafe.akka" %% "akka-slf4j" % "latest.release"
 libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.3"
 
 // test dependencies
