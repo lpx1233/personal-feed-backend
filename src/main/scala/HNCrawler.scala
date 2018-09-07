@@ -23,21 +23,22 @@ object HNCrawler {
   def props: Props = Props[HNCrawler]
   // internal data structure
   case class HNItem(
-    id: Int = 0,
-    deleted: Boolean = false,
-    itemType: String = "",
-    by: String = "",
-    time: Long = 0,
-    test: String = "",
-    dead: Boolean = false,
-    parent: Int = 0,
-    poll: Int = 0,
-    kids: List[Int] = List(),
-    url: String = "",
-    score: Int = 0,
-    title: String = "",
-    parts: List[Int] = List(),
-    descendants: Int = 0)
+    id: Int,
+    deleted: Option[Boolean],
+    itemType: Option[String],
+    by: Option[String],
+    time: Option[Long],
+    test: Option[String],
+    dead: Option[Boolean],
+    parent: Option[Int],
+    poll: Option[Int],
+    kids: Option[List[Int]],
+    url: Option[String],
+    score: Option[Int],
+    title: Option[String],
+    parts: Option[List[Int]],
+    descendants: Option[Int])
+  // bson & json parser
   implicit object HNItemWriter extends BSONDocumentWriter[HNItem] {
     def write(item: HNItem): BSONDocument =
       BSONDocument(
@@ -60,20 +61,20 @@ object HNCrawler {
   implicit object HNItemReader extends BSONDocumentReader[HNItem] {
     def read(bson: BSONDocument): HNItem = new HNItem(
       bson.getAs[Int]("id").get,
-      bson.getAs[Boolean]("deleted").get,
-      bson.getAs[String]("itemType").get,
-      bson.getAs[String]("by").get,
-      bson.getAs[Long]("time").get,
-      bson.getAs[String]("test").get,
-      bson.getAs[Boolean]("dead").get,
-      bson.getAs[Int]("parent").get,
-      bson.getAs[Int]("poll").get,
-      bson.getAs[List[Int]]("kids").get,
-      bson.getAs[String]("url").get,
-      bson.getAs[Int]("score").get,
-      bson.getAs[String]("title").get,
-      bson.getAs[List[Int]]("parts").get,
-      bson.getAs[Int]("descendants").get)
+      bson.getAs[Boolean]("deleted"),
+      bson.getAs[String]("itemType"),
+      bson.getAs[String]("by"),
+      bson.getAs[Long]("time"),
+      bson.getAs[String]("test"),
+      bson.getAs[Boolean]("dead"),
+      bson.getAs[Int]("parent"),
+      bson.getAs[Int]("poll"),
+      bson.getAs[List[Int]]("kids"),
+      bson.getAs[String]("url"),
+      bson.getAs[Int]("score"),
+      bson.getAs[String]("title"),
+      bson.getAs[List[Int]]("parts"),
+      bson.getAs[Int]("descendants"))
   }
   // messages
   case object Start
@@ -92,8 +93,8 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
   final implicit val materializer: ActorMaterializer =
       ActorMaterializer(ActorMaterializerSettings(context.system))
   val http = Http(context.system)
-  // define json parser
-  implicit val hNItemFormat = jsonFormat15(HNItem)
+  // json format
+  implicit val itemFormat = jsonFormat15(HNItem)
   // internal states
   var inProgress: Boolean = false
   var isTopStoriesStored: Boolean = false
