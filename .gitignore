@@ -8,6 +8,7 @@ project/plugins/project/
 .history
 .cache
 .lib/
+log
 
 # ensime related
 .ensime

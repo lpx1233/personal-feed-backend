@@ -7,9 +7,9 @@ object Main extends App {
 
   // start crawler actors
   val crawlerActorSystem = ActorSystem("crawler")
-  val crawlerScheduler = crawlerActorSystem.actorOf(CrawlScheduler.props)
-  crawlerScheduler ! CrawlScheduler.Start
+  // val crawlerScheduler = crawlerActorSystem.actorOf(CrawlScheduler.props)
+  // crawlerScheduler ! CrawlScheduler.Start
 
   // TODO: start web server
-
+  WebServer.startServer("localhost", 8080)
 }

@@ -76,6 +76,9 @@ object HNCrawler {
       bson.getAs[List[Int]]("parts"),
       bson.getAs[Int]("descendants"))
   }
+  // json format
+  import DefaultJsonProtocol._
+  implicit val itemFormat = jsonFormat15(HNItem)
   // messages
   case object Start
   private case class GetItemsByTopStoriesIds(items: List[Int])
@@ -93,8 +96,6 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
   final implicit val materializer: ActorMaterializer =
       ActorMaterializer(ActorMaterializerSettings(context.system))
   val http = Http(context.system)
-  // json format
-  implicit val itemFormat = jsonFormat15(HNItem)
   // internal states
   var inProgress: Boolean = false
   var isTopStoriesStored: Boolean = false
@@ -185,6 +186,7 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
       isTopStoriesStored = false
       itemsStored = 0
       // TODO: inform sender
+      // TODO: check data integrity
       // TODO: clean old items
   }
 }
