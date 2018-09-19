@@ -10,26 +10,30 @@ import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
+import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 
 // Server definition
 object WebServer extends HttpApp with SprayJsonSupport with DefaultJsonProtocol {
   import HNCrawler._
   override def routes: Route =
-    get {
-      pathSingleSlash {
-        complete("Hello! This is My Personal Feed Backend~")
-      } ~
-      path("topstories") {
-        onSuccess(getHNTopStories()) { topStories =>
-          complete(topStories)
-        }
-      } ~
-      path("id" / IntNumber) { id =>
-        onSuccess(getHNItemById(id)) { item =>
-          complete(item)
+    cors() {
+      get {
+        pathSingleSlash {
+          complete("Hello! This is My Personal Feed Backend~")
+        } ~
+        path("topstories") {
+          onSuccess(getHNTopStories()) { topStories =>
+            complete(topStories)
+          }
+        } ~
+        path("id" / IntNumber) { id =>
+          onSuccess(getHNItemById(id)) { item =>
+            complete(item)
+          }
         }
       }
     }
+    
   def getHNTopStories(): Future[List[Int]] = {
     MongoConn.connection.database("hacker_news")
       .map(_.collection("top_stories"))
