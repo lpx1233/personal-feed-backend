@@ -11,5 +11,5 @@ object Main extends App {
   crawlerScheduler ! CrawlScheduler.Start
 
   // start web server
-  WebServer.startServer("localhost", 8080)
+  WebServer.startServer("0.0.0.0", 8080)
 }
