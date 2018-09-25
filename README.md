@@ -13,6 +13,6 @@ sbt run
 * Web server using Akka Http
 
 ## TODOs
-* Support other tech news website
+* Support other tech news website (Maybe with the help of [News API](https://newsapi.org/))
 * Feed ranking algorithm with different news source
 * Re-design backend HTTP API
