@@ -3,6 +3,7 @@ package cn.lpx1233.personal_feed_backend
 import akka.actor.Actor
 import akka.actor.Props
 import akka.actor.ActorLogging
+import akka.actor.Timers
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.stream.{ ActorMaterializer, ActorMaterializerSettings }
@@ -15,6 +16,7 @@ import reactivemongo.bson.{
   BSONDocumentWriter, BSONDocumentReader, Macros, BSONDocument
 }
 
+import scala.concurrent.duration._
 import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 
@@ -81,14 +83,16 @@ object HNCrawler {
   implicit val itemFormat = jsonFormat15(HNItem)
   // messages
   case object Start
-  private case class GetItemsByTopStoriesIds(items: List[Int])
-  private case class StoreTopStoriesIds(items: List[Int])
-  private case class StoreItem(item: HNItem)
-  private case object Completed
+  private case object GetTopStoriesIDs
+  private case class GetHeadItemByIDs(itemIDs: List[Int])
+  private case object End
+  private case object Retry
+  // timer keys
+  private case object RetryKey
 }
 
-class HNCrawler extends Actor with ActorLogging with SprayJsonSupport 
-    with DefaultJsonProtocol {
+class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
+    with DefaultJsonProtocol with Timers {
   // Setup env
   import akka.pattern.pipe
   import context.dispatcher
@@ -98,93 +102,88 @@ class HNCrawler extends Actor with ActorLogging with SprayJsonSupport
   val http = Http(context.system)
   // internal states
   var inProgress: Boolean = false
-  var isTopStoriesStored: Boolean = false
-  var itemsStored: Int = 0
+  var retryTimes: Int = 5
   // define core functionality
   def receive = {
-    // TODO: implement retry method
     case Start =>
-        // start crawl hacker news
-        log.info("HNCrawler get Start")
-        Future.fromTry(Try(
-            if(!inProgress) true else throw new Exception("HNCrawler in progress")))
-          .flatMap { (_) =>
+      // start crawl hacker news
+      log.info("HNCrawler: start running")
+      Future.fromTry(
+          Try(if (!inProgress) true else throw new Exception("in progress")))
+        .onComplete {
+          case Success(_) =>
             inProgress = true
-            isTopStoriesStored = false
-            itemsStored = 0
-            http.singleRequest(HttpRequest(uri =
-              "https://hacker-news.firebaseio.com/v0/topstories.json"))
-          }.flatMap {
-            case HttpResponse(StatusCodes.OK, _, e, _) => Unmarshal(e).to[List[Int]]
-            case HttpResponse(status, _, e, _) =>
-              e.discardBytes()
-              Future.failed(new Exception(s"service returned ${status.intValue()}"))
-          }.onComplete {
-            case Success(items: List[Int]) => {
-              self ! GetItemsByTopStoriesIds(items)
-              self ! StoreTopStoriesIds(items)
-            }
-            case Failure(e) => log.error(
-                s"Hacker News Crawler: Get top stories error, ${e.getMessage()}")
+            self ! GetTopStoriesIDs
+          case Failure(e) =>
+            log.info(s"HNCrawler: currently in progress")
+        }
+    case GetTopStoriesIDs =>
+      // get top stories ids and store them into db
+      log.info("HNCrawler: start fetching top stories IDs")
+      http.singleRequest(
+          HttpRequest(uri = "https://hacker-news.firebaseio.com/v0/topstories.json"))
+        .flatMap {
+          case HttpResponse(StatusCodes.OK, _, e, _) => Unmarshal(e).to[List[Int]]
+          case HttpResponse(status, _, e, _) =>
+            e.discardBytes()
+            Future.failed(new Exception(s"service returned ${status.intValue()}"))
+        }.flatMap { (itemIDs: List[Int]) =>
+          val selector = BSONDocument("_id" -> 0)
+          val updater = BSONDocument("top_stories" -> itemIDs)
+          MongoConn.connection.database("hacker_news")
+            .map(_.collection("top_stories"))
+            .flatMap(_.update(selector, updater, upsert=true))
+            .map((_, itemIDs))
+        }.onComplete {
+          case Success((storeRes, itemIDs)) => {
+            self ! GetHeadItemByIDs(itemIDs)
+            log.info(s"HNCrawler: get top stories ids success")
           }
-    case GetItemsByTopStoriesIds(items: List[Int]) =>
-      log.info("HNCrawler get GetItemsByTopStoriesIds")
-      items match {
-        case item :: rest =>
+          case Failure(e) =>
+            log.error(s"HNCrawler: get top stories error, ${e.getMessage()}")
+            self ! Retry
+        }
+    case GetHeadItemByIDs(itemIDs: List[Int]) =>
+      // get item by id one by one
+      itemIDs match {
+        case itemID :: rest =>
+          log.info(s"HNCrawler: start get item[${itemID}]")
           http.singleRequest(HttpRequest(uri =
-              s"https://hacker-news.firebaseio.com/v0/item/$item.json"))
+              s"https://hacker-news.firebaseio.com/v0/item/${itemID}.json"))
             .flatMap {
               case HttpResponse(StatusCodes.OK, _, e, _) => Unmarshal(e).to[HNItem]
               case HttpResponse(status, _, e, _) =>
                 e.discardBytes()
                 Future.failed(new Exception(s"service returned ${status.intValue()}"))
-            }.onComplete((res) => {
-              self ! GetItemsByTopStoriesIds(rest)
-              res match {
-                case Success(item: HNItem) => self ! StoreItem(item)
-                case Failure(e) => log.error(
-                    s"Hacker News Crawler: Get item[$item] error, ${e.getMessage()}")
-              }
-            })
+            }.flatMap { (item) =>
+              val selector = BSONDocument("id" -> item.id)
+              MongoConn.connection.database("hacker_news")
+                .map(_.collection("items"))
+                .flatMap(_.update(selector, item, upsert=true))
+            }.onComplete {
+              case Success(res) =>
+                log.info(s"HNCrawler: store item[${itemID}] success")
+                self ! GetHeadItemByIDs(rest)
+              case Failure(e) => 
+                log.error(s"HNCrawler: Get item[${itemID}] error, ${e.getMessage()}")
+                self ! Retry
+            }
         case Nil =>
+          log.info(s"HNCrawler: finished all item fetching")
+          self ! End
       }
-    case StoreTopStoriesIds(items: List[Int]) =>
-      // store the top stories ids in mongodb
-      log.info("HNCrawler get StoreTopStoriesIds")
-      val selector = BSONDocument("_id" -> 0)
-      val updater = BSONDocument("top_stories" -> items)
-      MongoConn.connection.database("hacker_news")
-        .map(_.collection("top_stories"))
-        .flatMap(_.update(selector, updater, upsert=true))
-        .onComplete {
-          case Success(res) =>
-            log.info(s"Hacker News Crawler: store top stories ids success")
-            isTopStoriesStored = true
-            if(itemsStored == 500) self ! Completed
-          case Failure(e) => log.error(
-              s"Hacker News Crawler: store top stories ids error, ${e.getMessage()}")
-        }
-    case StoreItem(item: HNItem) =>
-      // store a item using mongodb
-      log.info("HNCrawler get StoreItem")
-      val selector = BSONDocument("id" -> item.id)
-      MongoConn.connection.database("hacker_news")
-        .map(_.collection("items"))
-        .flatMap(_.update(selector, item, upsert=true))
-        .onComplete {
-          case Success(res) =>
-            log.info(s"Hacker News Crawler: store item[${item.id}] success")
-            itemsStored += 1
-            if(isTopStoriesStored && itemsStored == 500) self ! Completed
-          case Failure(e) => log.error(
-              s"Hacker News Crawler: store item[${item.id}] error, ${e.getMessage()}")
-        }
-    case Completed =>
-      log.info("HNCrawler get Completed")
-      // progress completed
+    case Retry =>
+      // retry after 1 min for 4 times
+      retryTimes -= 1
+      if (retryTimes > 0)
+        timers.startSingleTimer(RetryKey, GetTopStoriesIDs, 1.minute)
+      else {
+        log.error(s"HNCrawler: crawling failed 5 times, ending")
+        self ! End
+      }
+    case End =>
+      log.info("HNCrawler: crawling end")
       inProgress = false
-      isTopStoriesStored = false
-      itemsStored = 0
       // TODO: inform sender
       // TODO: check data integrity
       // TODO: clean old items
