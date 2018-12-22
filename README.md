@@ -10,9 +10,10 @@ sbt run
 ## Implemented
 * Application framework with Akka (Actor, Http) and MongoDB
 * Hacker News crawler
-* Web server using Akka Http
+* Web server using Akka Http (REST & GraphQL)
+* GraphQL-Playground integration
 
 ## TODOs
-* Re-design backend HTTP API using GraphQL
+* User-based recommendation mechanism
 * Support other tech news website (Maybe with the help of [News API](https://newsapi.org/))
 * Feed ranking algorithm with different news source

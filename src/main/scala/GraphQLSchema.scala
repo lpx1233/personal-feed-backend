@@ -11,34 +11,43 @@ object GraphQLSchema {
     ObjectTypeDescription("Hacker News Item"))
 
   val itemID = Argument("id", IntType)
+
+  val topstoriesLen = Argument("len", OptionInputType(IntType))
+
   val userID = Argument("userID", IntType)
+  val recommendLen = Argument("len", IntType)
 
   val queryType = ObjectType("Query", fields[HNItemRepo, Unit](
     Field("item", OptionType(HNItemType),
       description = Some("Returns a item with specific `id`."),
       arguments = itemID :: Nil,
-      resolve = c => c.ctx.item(c arg itemID)),
+      resolve = c => c.ctx.item(c.arg(itemID))),
       
     Field("topstories", ListType(HNItemType),
       description = Some("Returns a list topstories for all users."),
-      resolve = _.ctx.topstories),
+      arguments = topstoriesLen :: Nil,
+      resolve = c => c.ctx.topstories(c.arg(topstoriesLen))),
 
     Field("recommended", ListType(HNItemType),
       description = Some("Returns a list of recommended item for a specific user."),
-      resolve = c => c.ctx.recommended(c arg userID))))
+      arguments = userID :: recommendLen :: Nil,
+      resolve = c => c.ctx.recommended(c.arg(userID), c.arg(recommendLen)))))
 
   val schema = Schema(queryType)
 }
 
 class HNItemRepo {
   def item(id: Int): Future[HNItem] = MongoConn.getHNItemById(id)
-  def topstories: Future[List[HNItem]] = {
+  def topstories(len: Option[Int]): Future[List[HNItem]] = {
     MongoConn.getHNTopStories()
       .flatMap { (topIDs: List[Int]) =>
-        Future.sequence(topIDs.map { (id: Int) =>
-          MongoConn.getHNItemById(id)
-        })
-      }
+        val idsToFetch = len match {
+          case Some(l) => topIDs.take(l)
+          case None => topIDs
+        }
+        Future.sequence(idsToFetch.map { (id: Int) => MongoConn.getHNItemById(id) }
+      )}
   }
-  def recommended(userID: Int): Future[List[HNItem]] = ???
+  // TODO: implement recommendation logic
+  def recommended(userID: Int, len: Int): Future[List[HNItem]] = ???
 }

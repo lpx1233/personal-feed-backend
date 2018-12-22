@@ -27,6 +27,7 @@ object WebServer extends HttpApp with SprayJsonSupport with DefaultJsonProtocol 
         pathSingleSlash {
           complete("Hello! This is My Personal Feed Backend~")
         } ~
+        // RESTful API endpoints
         path("topstories") {
           onSuccess(MongoConn.getHNTopStories()) { topStories =>
             complete(topStories)
@@ -37,27 +38,27 @@ object WebServer extends HttpApp with SprayJsonSupport with DefaultJsonProtocol 
             complete(item)
           }
         } ~
-        path("graphql") {
-          path("playground.html") {
-            getFromResource("playground.html")
-          } ~
-          entity(as[JsValue]) { requestJson =>
-            val JsObject(fields) = requestJson
-            val JsString(query) = fields("query")
-            val operation = fields.get("operationName") collect {
-              case JsString(op) => op
-            }
-            val vars = fields.get("variables") match {
-              case Some(obj: JsObject) => obj
-              case _ => JsObject.empty
-            }
-            QueryParser.parse(query) match {
-              case Success(queryAst) =>
-                complete(executeGraphQLQuery(queryAst, operation, vars))
-              case Failure(error) =>
-                complete(StatusCodes.BadRequest, JsObject("error" -> JsString(error.getMessage)))
-            }
-          }
+        // graphql-playground endpoint
+        path("graphql-playground") {
+          getFromResource("playground.html")
+        }
+      } ~
+      // graphql endpoint
+      ((get | post) & path("graphql") & entity(as[JsValue])) { requestJson =>
+        val JsObject(fields) = requestJson
+        val JsString(query) = fields("query")
+        val operation = fields.get("operationName") collect {
+          case JsString(op) => op
+        }
+        val vars = fields.get("variables") match {
+          case Some(obj: JsObject) => obj
+          case _ => JsObject.empty
+        }
+        QueryParser.parse(query) match {
+          case Success(queryAst) =>
+            complete(executeGraphQLQuery(queryAst, operation, vars))
+          case Failure(error) =>
+            complete(StatusCodes.BadRequest, JsObject("error" -> JsString(error.getMessage)))
         }
       }
     }
