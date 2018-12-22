@@ -21,7 +21,6 @@ import ExecutionContext.Implicits.global
 
 // Server definition
 object WebServer extends HttpApp with SprayJsonSupport with DefaultJsonProtocol {
-  import HNCrawler._
   override def routes: Route =
     cors() {
       get {
@@ -29,12 +28,12 @@ object WebServer extends HttpApp with SprayJsonSupport with DefaultJsonProtocol 
           complete("Hello! This is My Personal Feed Backend~")
         } ~
         path("topstories") {
-          onSuccess(getHNTopStories()) { topStories =>
+          onSuccess(MongoConn.getHNTopStories()) { topStories =>
             complete(topStories)
           }
         } ~
         path("id" / IntNumber) { id =>
-          onSuccess(getHNItemById(id)) { item =>
+          onSuccess(MongoConn.getHNItemById(id)) { item =>
             complete(item)
           }
         } ~
@@ -61,21 +60,10 @@ object WebServer extends HttpApp with SprayJsonSupport with DefaultJsonProtocol 
         }
       }
     }
-    
-  def getHNTopStories(): Future[List[Int]] = {
-    MongoConn.connection.database("hacker_news")
-      .map(_.collection("top_stories"))
-      .flatMap(_.find(BSONDocument("_id" -> 0)).requireOne[BSONDocument])
-      .map(_.getAs[List[Int]]("top_stories").get)
-  }
-  def getHNItemById(id: Int): Future[HNItem] = {
-    MongoConn.connection.database("hacker_news")
-      .map(_.collection("items"))
-      .flatMap(_.find(BSONDocument("id" -> id)).requireOne[HNItem])
-  }
+
   def executeGraphQLQuery(query: Document, op: Option[String], vars: JsObject) =
-    Executor.execute(
-        schema, query, new ProductRepo, variables = vars, operationName = op)
+    Executor.execute(GraphQLSchema.schema, query, new HNItemRepo,
+        variables = vars, operationName = op)
       .map(StatusCodes.OK -> _)
       .recover {
         case error: QueryAnalysisError =>
