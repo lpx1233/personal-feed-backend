@@ -37,26 +37,27 @@ object WebServer extends HttpApp with SprayJsonSupport with DefaultJsonProtocol 
             complete(item)
           }
         } ~
-        (path("graphql") & entity(as[JsValue])) { requestJson =>
-          // TODO: implement GraphQL
-          val JsObject(fields) = requestJson
-          val JsString(query) = fields("query")
-          val operation = fields.get("operationName") collect {
-            case JsString(op) => op
+        path("graphql") {
+          path("playground.html") {
+            getFromResource("playground.html")
+          } ~
+          entity(as[JsValue]) { requestJson =>
+            val JsObject(fields) = requestJson
+            val JsString(query) = fields("query")
+            val operation = fields.get("operationName") collect {
+              case JsString(op) => op
+            }
+            val vars = fields.get("variables") match {
+              case Some(obj: JsObject) => obj
+              case _ => JsObject.empty
+            }
+            QueryParser.parse(query) match {
+              case Success(queryAst) =>
+                complete(executeGraphQLQuery(queryAst, operation, vars))
+              case Failure(error) =>
+                complete(StatusCodes.BadRequest, JsObject("error" -> JsString(error.getMessage)))
+            }
           }
-          val vars = fields.get("variables") match {
-            case Some(obj: JsObject) => obj
-            case _ => JsObject.empty
-          }
-          QueryParser.parse(query) match {
-            case Success(queryAst) =>
-              complete(executeGraphQLQuery(queryAst, operation, vars))
-            case Failure(error) =>
-              complete(StatusCodes.BadRequest, JsObject("error" -> JsString(error.getMessage)))
-          }
-        } ~
-        path("graphiql.html") {
-          getFromResource("graphiql.html")
         }
       }
     }
