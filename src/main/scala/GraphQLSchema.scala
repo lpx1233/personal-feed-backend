@@ -15,6 +15,7 @@ object GraphQLSchema {
   val itemID = Argument("id", IntType)
 
   // define argument for topstories
+  val topstoriesFrom = Argument("from", IntType)
   val topstoriesLen = Argument("len", IntType)
 
   // define arguments for recommended
@@ -31,8 +32,8 @@ object GraphQLSchema {
       
     Field("topstories", ListType(HNItemType),
       description = Some("Returns a list topstories for all users."),
-      arguments = topstoriesLen :: Nil,
-      resolve = c => c.ctx.topstories(c.arg(topstoriesLen))),
+      arguments = topstoriesFrom :: topstoriesLen :: Nil,
+      resolve = c => c.ctx.topstories(c.arg(topstoriesFrom), c.arg(topstoriesLen))),
 
     Field("recommended", ListType(HNItemType),
       description = Some("Returns a list of recommended item for a specific user."),
@@ -45,10 +46,10 @@ object GraphQLSchema {
 
 class HNItemRepo {
   def item(id: Int): Future[HNItem] = MongoConn.getHNItemById(id)
-  def topstories(len: Int): Future[List[HNItem]] = {
+  def topstories(from: Int, len: Int): Future[List[HNItem]] = {
     MongoConn.getHNTopStories()
       .flatMap { (topIDs: List[Int]) =>
-        Future.sequence(topIDs.take(len).map { (id: Int) =>
+        Future.sequence(topIDs.drop(from).take(len).map { (id: Int) =>
           MongoConn.getHNItemById(id)
         }
       )}
