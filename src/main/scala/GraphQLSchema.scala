@@ -5,6 +5,7 @@ import sangria.macros.derive._
 import HNCrawler.HNItem
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.Random
 
 object GraphQLSchema {
   // define HNItem
@@ -29,7 +30,7 @@ object GraphQLSchema {
       description = Some("Returns a item with specific `id`."),
       arguments = itemID :: Nil,
       resolve = c => c.ctx.item(c.arg(itemID))),
-      
+
     Field("topstories", ListType(HNItemType),
       description = Some("Returns a list topstories for all users."),
       arguments = topstoriesFrom :: topstoriesLen :: Nil,
@@ -51,8 +52,8 @@ class HNItemRepo {
       .flatMap { (topIDs: List[Int]) =>
         Future.sequence(topIDs.drop(from).take(len).map { (id: Int) =>
           MongoConn.getHNItemById(id)
-        }
-      )}
+        })
+      }
   }
   // TODO: implement recommendation logic
   // userID: user identification for recommendation, 0 refers to global user
@@ -60,6 +61,21 @@ class HNItemRepo {
   // readBefore: the list of item read before, is used to prevent double
   //   recommendation. If userID is not 0 and server have a read history
   //   of this user, readBefore could be Nil.
-  def recommended(userID: Int, len: Int, readBefore: Seq[Int])
-    : Future[List[HNItem]] = ???
+  def recommended(userID: Int, len: Int, readBefore: Seq[Int]): Future[List[HNItem]] = {
+    val readSet = readBefore.toSet
+    MongoConn.getAllItemIds()
+      .map { (itemIDs: List[Int]) =>
+        def loop(res: List[Int]): List[Int] = {
+          val idx = Random.nextInt(res.length)
+          if (res.length == len) res
+          else if (!readSet.contains(idx) && !res.toSet.contains(idx)) loop(idx :: res)
+          else loop(res)
+        }
+        loop(itemIDs)
+      }.flatMap { (itemIDs: List[Int]) =>
+        Future.sequence(itemIDs.map { (id: Int) =>
+          MongoConn.getHNItemById(id)
+        })
+      }
+  }
 }
