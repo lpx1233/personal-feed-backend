@@ -6,6 +6,7 @@ import HNCrawler.HNItem
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Random
+import com.typesafe.scalalogging.LazyLogging
 
 object GraphQLSchema {
   // define HNItem
@@ -45,7 +46,7 @@ object GraphQLSchema {
   val schema = Schema(queryType)
 }
 
-class HNItemRepo {
+class HNItemRepo extends LazyLogging {
   def item(id: Int): Future[HNItem] = MongoConn.getHNItemById(id)
   def topstories(from: Int, len: Int): Future[List[HNItem]] = {
     MongoConn.getHNTopStories()
@@ -64,14 +65,17 @@ class HNItemRepo {
   def recommended(userID: Int, len: Int, readBefore: Seq[Int]): Future[List[HNItem]] = {
     val readSet = readBefore.toSet
     MongoConn.getAllItemIds()
-      .map { (itemIDs: List[Int]) =>
+      .map(_.toVector)
+      .map { (itemIDs: Vector[Int]) =>
         def loop(res: List[Int]): List[Int] = {
-          val idx = Random.nextInt(res.length)
+          val idx = Random.nextInt(itemIDs.length)
+          val id = itemIDs(idx)
+          // logger.info(s"idx = ${idx}, id = ${id}")
           if (res.length == len) res
-          else if (!readSet.contains(idx) && !res.toSet.contains(idx)) loop(idx :: res)
+          else if (!readSet.contains(id) && !res.toSet.contains(id)) loop(id :: res)
           else loop(res)
         }
-        loop(itemIDs)
+        loop(List())
       }.flatMap { (itemIDs: List[Int]) =>
         Future.sequence(itemIDs.map { (id: Int) =>
           MongoConn.getHNItemById(id)
