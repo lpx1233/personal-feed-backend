@@ -13,6 +13,7 @@ libraryDependencies += "io.spray" %% "spray-json" % "latest.release"
 libraryDependencies += "org.reactivemongo" %% "reactivemongo" % "latest.release"
 libraryDependencies += "com.typesafe.akka" %% "akka-slf4j" % "latest.release"
 libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.3"
+libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging" % "latest.release"
 libraryDependencies += "ch.megard" %% "akka-http-cors" % "latest.release"
 // GraphQL Support
 libraryDependencies += "org.sangria-graphql" %% "sangria" % "latest.release"

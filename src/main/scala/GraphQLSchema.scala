@@ -5,6 +5,8 @@ import sangria.macros.derive._
 import HNCrawler.HNItem
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.Random
+import com.typesafe.scalalogging.LazyLogging
 
 object GraphQLSchema {
   // define HNItem
@@ -29,7 +31,7 @@ object GraphQLSchema {
       description = Some("Returns a item with specific `id`."),
       arguments = itemID :: Nil,
       resolve = c => c.ctx.item(c.arg(itemID))),
-      
+
     Field("topstories", ListType(HNItemType),
       description = Some("Returns a list topstories for all users."),
       arguments = topstoriesFrom :: topstoriesLen :: Nil,
@@ -44,15 +46,15 @@ object GraphQLSchema {
   val schema = Schema(queryType)
 }
 
-class HNItemRepo {
+class HNItemRepo extends LazyLogging {
   def item(id: Int): Future[HNItem] = MongoConn.getHNItemById(id)
   def topstories(from: Int, len: Int): Future[List[HNItem]] = {
     MongoConn.getHNTopStories()
       .flatMap { (topIDs: List[Int]) =>
         Future.sequence(topIDs.drop(from).take(len).map { (id: Int) =>
           MongoConn.getHNItemById(id)
-        }
-      )}
+        })
+      }
   }
   // TODO: implement recommendation logic
   // userID: user identification for recommendation, 0 refers to global user
@@ -60,6 +62,24 @@ class HNItemRepo {
   // readBefore: the list of item read before, is used to prevent double
   //   recommendation. If userID is not 0 and server have a read history
   //   of this user, readBefore could be Nil.
-  def recommended(userID: Int, len: Int, readBefore: Seq[Int])
-    : Future[List[HNItem]] = ???
+  def recommended(userID: Int, len: Int, readBefore: Seq[Int]): Future[List[HNItem]] = {
+    val readSet = readBefore.toSet
+    MongoConn.getAllItemIds()
+      .map(_.toVector)
+      .map { (itemIDs: Vector[Int]) =>
+        def loop(res: List[Int]): List[Int] = {
+          val idx = Random.nextInt(itemIDs.length)
+          val id = itemIDs(idx)
+          // logger.info(s"idx = ${idx}, id = ${id}")
+          if (res.length == len) res
+          else if (!readSet.contains(id) && !res.toSet.contains(id)) loop(id :: res)
+          else loop(res)
+        }
+        loop(List())
+      }.flatMap { (itemIDs: List[Int]) =>
+        Future.sequence(itemIDs.map { (id: Int) =>
+          MongoConn.getHNItemById(id)
+        })
+      }
+  }
 }
