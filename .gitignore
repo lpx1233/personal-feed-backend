@@ -15,3 +15,8 @@ log
 ensime-langserver.log
 pc.stdout.log
 .ensime_cache
+
+# metals relared
+.bloop
+.metals
+project/
