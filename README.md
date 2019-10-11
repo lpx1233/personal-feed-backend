@@ -1,6 +1,5 @@
 # My Personal Feed Backend
-[![Travis CI Status](https://travis-ci.org/lpx1233/personal-feed-backend.svg?branch=master)](https://travis-ci.org/lpx1233/personal-feed-backend)
-[![Actions Status](https://github.com/lpx1233/personal-feed-backend/workflows/Scala%20CI/badge.svg)](https://github.com/lpx1233/personal-feed-backend/actions)
+[![Travis CI Status](https://travis-ci.org/lpx1233/personal-feed-backend.svg?branch=master)](https://travis-ci.org/lpx1233/personal-feed-backend) [![Actions Status](https://github.com/lpx1233/personal-feed-backend/workflows/Scala%20CI/badge.svg)](https://github.com/lpx1233/personal-feed-backend/actions)
 
 ## Usage
 ```
